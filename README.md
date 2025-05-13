@@ -397,4 +397,84 @@ The **PGA** is memory used by **dedicated server processes** for:
 
 ---
 
+# Oracle DBA - Topic 4: Software Installation & Database Creation
 
+In this module, you’ll learn how to install Oracle software, create a database manually and using DBCA, verify the database setup, understand different shutdown modes, and perform an Oracle 12c upgrade.
+
+---
+
+## Table of Contents
+
+1. [Oracle Software Installation](#oracle-software-installation)
+2. [Database Creation - Manual Method](#database-creation---manual-method)
+3. [Verifying Database Creation](#verifying-database-creation)
+4. [Database Creation using DBCA](#database-creation-using-dbca)
+5. [Oracle Shutdown Methods](#oracle-shutdown-methods)
+6. [Oracle 12c Upgrade Overview](#oracle-12c-upgrade-overview)
+7. [Conclusion](#conclusion)
+
+---
+
+## Oracle Software Installation
+
+Oracle software can be installed via:
+
+### GUI-Based Installer:
+1. Download the Oracle Database software from Oracle's official site.
+2. Unzip and run `runInstaller`.
+3. Choose installation type: **Server Class**, **Desktop Class**, etc.
+4. Set Oracle base, software location, and other parameters.
+5. Proceed through configuration screens.
+6. Execute scripts as prompted (`root.sh`).
+
+### Silent Mode (Command Line):
+- Use a response file for automated installations.
+
+```bash
+./runInstaller -silent -responseFile /path/to/db_install.rsp
+```
+
+## Database Creation - Manual Method
+### 1. Set Oracle environment variables
+```bash
+export ORACLE_SID=ORCL
+export ORACLE_HOME=/u01/app/oracle/product/12.2.0/dbhome_1
+```
+
+### 2. Create Initialization Parameter File
+Example: initORCL.ora
+```bash
+db_name=ORCL
+memory_target=1G
+control_files=(/u01/oradata/ORCL/control01.ctl)
+```
+
+### 3. Start Instance in NOMOUNT Mode
+```bash
+sqlplus / as sysdba
+STARTUP NOMOUNT PFILE='/path/to/initORCL.ora';
+```
+
+### 4. Create Database
+```bash
+CREATE DATABASE ORCL
+   USER SYS IDENTIFIED BY oracle
+   USER SYSTEM IDENTIFIED BY oracle
+   LOGFILE GROUP 1 ('/u01/oradata/ORCL/redo01.log') SIZE 50M,
+           GROUP 2 ('/u01/oradata/ORCL/redo02.log') SIZE 50M
+   MAXLOGFILES 5
+   MAXDATAFILES 100
+   CHARACTER SET AL32UTF8
+   DATAFILE '/u01/oradata/ORCL/system01.dbf' SIZE 700M REUSE
+   SYSAUX DATAFILE '/u01/oradata/ORCL/sysaux01.dbf' SIZE 550M
+   DEFAULT TEMPORARY TABLESPACE temp
+      TEMPFILE '/u01/oradata/ORCL/temp01.dbf' SIZE 20M
+   UNDO TABLESPACE undotbs1
+      DATAFILE '/u01/oradata/ORCL/undotbs01.dbf' SIZE 200M;
+```
+
+### 5. Create Data Dictionary Views
+```bash
+@?/rdbms/admin/catalog.sql
+@?/rdbms/admin/catproc.sql
+```
