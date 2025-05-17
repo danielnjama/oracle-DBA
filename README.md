@@ -121,22 +121,6 @@ Oracle Database operates through a combination of memory structures and backgrou
 
 ---
 
-## Table of Contents
-
-1. [Overview of Oracle Process Architecture](#overview-of-oracle-process-architecture)
-2. [Types of Processes](#types-of-processes)
-3. [Database Writer (DBWn)](#database-writer-dbwn)
-4. [Log Writer (LGWR)](#log-writer-lgwr)
-5. [Checkpoint (CKPT)](#checkpoint-ckpt)
-6. [System Monitor (SMON)](#system-monitor-smon)
-7. [Process Monitor (PMON)](#process-monitor-pmon)
-8. [Recoverer Process (RECO)](#recoverer-process-reco)
-9. [Archiver Process (ARCn)](#archiver-process-arcn)
-10. [Other Background Processes](#other-background-processes)
-11. [Conclusion](#conclusion)
-
----
-
 ## Overview of Oracle Process Architecture
 
 When an Oracle database is started, an **Oracle instance** is created, consisting of:
@@ -255,23 +239,6 @@ Oracle Database's performance heavily depends on efficient memory management. Th
 ---
 
 ## Table of Contents
-
-1. [Overview of Memory Architecture](#overview-of-memory-architecture)
-2. [System Global Area (SGA)](#system-global-area-sga)
-   - [Database Buffer Cache](#database-buffer-cache)
-   - [Shared Pool](#shared-pool)
-   - [Redo Log Buffer](#redo-log-buffer)
-   - [Large Pool](#large-pool)
-   - [Java Pool & Streams Pool](#java-pool--streams-pool)
-   - [Keep Buffer Pool](#keep-buffer-pool)
-   - [Recycle Buffer Pool](#recycle-buffer-pool)
-   - [Non-Default (nK) Buffer Cache](#non-default-nk-buffer-cache)
-3. [Program Global Area (PGA)](#program-global-area-pga)
-4. [Dedicated vs Shared Server Architecture](#dedicated-vs-shared-server-architecture)
-5. [PGA in Shared Server Environment](#pga-in-shared-server-environment)
-6. [Conclusion](#conclusion)
-
----
 
 ## Overview of Memory Architecture
 
@@ -400,18 +367,6 @@ The **PGA** is memory used by **dedicated server processes** for:
 # Oracle DBA - Topic 4: Software Installation & Database Creation
 
 In this module, you’ll learn how to install Oracle software, create a database manually and using DBCA, verify the database setup, understand different shutdown modes, and perform an Oracle 12c upgrade.
-
----
-
-## Table of Contents
-
-1. [Oracle Software Installation](#oracle-software-installation)
-2. [Database Creation - Manual Method](#database-creation---manual-method)
-3. [Verifying Database Creation](#verifying-database-creation)
-4. [Database Creation using DBCA](#database-creation-using-dbca)
-5. [Oracle Shutdown Methods](#oracle-shutdown-methods)
-6. [Oracle 12c Upgrade Overview](#oracle-12c-upgrade-overview)
-7. [Conclusion](#conclusion)
 
 ---
 
@@ -605,25 +560,6 @@ Tablespaces are logical storage containers in Oracle that allow efficient data o
 ---
 
 ## Table of Contents
-
-1. [How Data is Stored in a Database](#how-data-is-stored-in-a-database)
-2. [Tablespace Concepts](#tablespace-concepts)
-3. [Types of Tablespaces](#types-of-tablespaces)
-   - [Permanent Tablespaces](#permanent-tablespaces)
-   - [Temporary Tablespaces](#temporary-tablespaces)
-   - [Undo Tablespaces](#undo-tablespaces)
-   - [Bigfile vs Smallfile Tablespaces](#bigfile-vs-smallfile-tablespaces)
-4. [Online vs Offline Tablespaces](#online-vs-offline-tablespaces)
-5. [Creating a Tablespace](#creating-a-tablespace)
-6. [Tablespace with Different Block Sizes](#tablespace-with-different-block-sizes)
-7. [Temporary Tablespace Management](#temporary-tablespace-management)
-8. [Temporary Tablespace Groups](#temporary-tablespace-groups)
-9. [Extent Management](#extent-management)
-10. [Other Important Concepts](#other-important-concepts)
-11. [Conclusion](#conclusion)
-
----
-
 ## How Data is Stored in a Database
 
 - Data in Oracle is stored **physically in datafiles** and **logically in tablespaces**.
@@ -938,7 +874,7 @@ Redo management is a core component of Oracle's architecture that ensures transa
 
 ---
 
-## 🧱 Core Components of Redo
+## Core Components of Redo
 
 | Component       | Description |
 |----------------|-------------|
@@ -950,7 +886,7 @@ Redo management is a core component of Oracle's architecture that ensures transa
 
 ---
 
-## 🔁 How Redo Works (Flow)
+## How Redo Works (Flow)
 
 1. A user changes data (e.g., `UPDATE` statement).
 2. Redo record generated and placed into the **redo buffer**.
@@ -963,7 +899,7 @@ Redo management is a core component of Oracle's architecture that ensures transa
 
 ---
 
-## 🧠 Redo Log Buffer
+## Redo Log Buffer
 
 - Part of the **System Global Area (SGA)**.
 - Size controlled by `LOG_BUFFER` parameter.
@@ -1015,14 +951,14 @@ User management in Oracle involves creating, modifying, and controlling access f
 
 ---
 
-## 👤 What is a User in Oracle?
+##  What is a User in Oracle?
 
 - A **user** is a database account that can own schema objects and connect to the database.
 - Each user has a **default tablespace**, **temporary tablespace**, **profile**, and **authentication mechanism**.
 
 ---
 
-## 🏗️ Creating a User
+##  Creating a User
 
 ### Syntax:
 
@@ -1156,3 +1092,100 @@ CREATE USER C##admin IDENTIFIED BY password CONTAINER=ALL;
 ```sql
 CREATE USER app_user IDENTIFIED BY secret CONTAINER=CURRENT;
 ```
+
+
+# Oracle Multitenant Architecture
+
+## Overview
+
+Oracle Database 12c and later introduced **Multitenant Architecture**, which uses:
+
+- **CDB (Container Database)**: The root container that holds system metadata and can contain multiple **PDBs**.
+- **PDB (Pluggable Database)**: A self-contained database that runs inside a CDB. It has its own users, schemas, and application data.
+
+---
+
+## CDB vs PDB: Key Differences
+
+| Feature               | CDB (CDB$ROOT)                   | PDB (e.g., ORCLPDB1)                   |
+|-----------------------|----------------------------------|----------------------------------------|
+| Purpose               | System-level operations          | Application-specific data              |
+| Users/Roles           | Common (start with `C##`)        | Local (no special prefix)              |
+| Tables/Schemas        | Not recommended                  | ✅ Create tables/schemas here          |
+| Isolation             | Shared across PDBs               | Isolated to each PDB                   |
+| Data Access           | No app data                      | Full control over user/app data        |
+
+---
+
+## 🛠️ DBA Tasks: Where to Do What
+
+| Task                           | Recommended Container |
+|--------------------------------|------------------------|
+| Create application tables      | ✅ PDB                 |
+| Create users and roles         | ✅ PDB (Local Users)   |
+| Common users (across all PDBs) | ❌ CDB (use `C##`)     |
+| Grant privileges               | ✅ PDB                 |
+| Install applications           | ✅ PDB                 |
+| System-level config (e.g. undo)| ✅ CDB                 |
+
+---
+
+## 🔍 Checking and Managing Containers
+
+### ✅ Show Current Container
+```sql
+SHOW CON_NAME;
+```
+### List All Containers
+```sql
+SELECT CON_ID, NAME, OPEN_MODE, FROM V$CONTAINERS;
+```
+### Switch to Another PDB
+```sql
+ALTER SESSION SET CONTAINER = your_pdb_name;
+```
+Or connect directly:
+```bash
+sqlplus username/password@your_pdb_name
+```
+
+### Creating Users and Roles
+```sql
+## Create a Local User in a PDB
+-- Must be connected to the PDB
+CREATE USER hr IDENTIFIED BY hrpass;
+GRANT CONNECT, RESOURCE TO hr;
+
+## Create a Common User (Only in CDB)
+-- Must be connected to CDB$ROOT
+CREATE USER C##admin IDENTIFIED BY password;
+GRANT DBA TO C##admin CONTAINER=ALL;
+```
+## PDB Management
+### List All PDBs
+```sql
+SELECT NAME, OPEN_MODE FROM V$PDBS;
+```
+### Open a PDB
+```sql
+ALTER PLUGGABLE DATABASE your_pdb_name OPEN;
+```
+### Close a PDB
+```sql
+ALTER PLUGGABLE DATABASE your_pdb_name CLOSE IMMEDIATE;
+```
+### Useful Views
+| View           | Description               |
+| -------------- | ------------------------- |
+| `V$CONTAINERS` | Lists all containers      |
+| `V$PDBS`       | Lists PDB info            |
+| `CDB_USERS`    | All users in CDB and PDBs |
+| `CDB_TABLES`   | Tables across containers  |
+| `DBA_ROLES`    | All defined roles         |
+
+### Best Practices
+- Always operate in a PDB for application/database work.
+- Use CDB only for container-level configurations and shared resources.
+- Avoid creating application tables or users directly in the CDB$ROOT.
+- Name common users/roles with C## prefix only when needed.
+- Regularly check which container you're in before executing critical commands.
