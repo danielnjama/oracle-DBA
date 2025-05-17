@@ -478,3 +478,681 @@ CREATE DATABASE ORCL
 @?/rdbms/admin/catalog.sql
 @?/rdbms/admin/catproc.sql
 ```
+
+### Verifying Database Creation
+- Check the open status:
+```sql
+SELECT name, open_mode FROM v$database;
+```
+- Validate files:
+```bash
+ls -l /u01/oradata/ORCL/
+```
+- Check listener registration:
+```bash
+lsnrctl status
+```
+- Other checks to validate if database is open.
+```
+### Method 1
+#Access the database
+sqlplus / as sysdba
+
+#then
+SELECT status FROM v$instance;
+
+If the instance is not started, this will fail.
+
+If started but the DB is not mounted or open, you'll see:
+
+- STARTED
+- MOUNTED
+- OPEN
+
+### Method 2
+-- Check instance status
+SELECT status FROM v$instance;
+
+-- If needed, start instance
+STARTUP NOMOUNT;
+
+-- Mount the database (optional if not open yet)
+ALTER DATABASE MOUNT;
+
+-- Open the database
+ALTER DATABASE OPEN;
+
+### Method 3
+# On Linux/Unix
+ps -ef | grep pmon
+
+## If you get something like below; the database is up and running.
+oracle   1234     1  0 10:00 ?  00:00:00 ora_pmon_ORCL
+```
+
+## Database Creation using DBCA
+DBCA (Database Configuration Assistant) is a GUI tool to create/configure databases.
+### Steps:
+1. Set display support. Run  xhost +
+2. Run dbca
+3. Choose Create Database
+4. Select database type (Single Instance / RAC / Container DB)
+5. Configure:
+    - Global DB name & SID
+    - Storage locations
+    - Memory & sizing
+    - Character set
+    - Sample schemas (optional)
+6. Review and complete the process
+
+## Silent mode
+```bash
+dbca -silent -createDatabase \
+     -templateName XE_Database.dbc \
+     -gdbname ORCL -sid ORCL \
+     -responseFile NO_VALUE \
+     -characterSet AL32UTF8 \
+     -memoryPercentage 40 \
+     -emConfiguration NONE \
+     -sysPassword oracle \
+     -systemPassword oracle
+```
+Note:
+To locate the templateName: do this:
+```bash
+ls $ORACLE_HOME/assistants/dbca/templates/
+```
+Check for a file that ends with dbc.  Common template names are:
+- General_Purpose.dbc
+- Data_Warehouse.dbc
+- New_Database.dbt (for custom templates)
+
+# Oracle Shutdown Methods
+
+Oracle Database supports multiple shutdown methods, each suited to different scenarios depending on the urgency and impact on users and transactions.
+
+## 🔻 Shutdown Methods
+
+| Method        | Description |
+|---------------|-------------|
+| **NORMAL**      | Waits for all users to disconnect. No new connections are allowed during this time. Ideal for planned maintenance. |
+| **IMMEDIATE**   | Terminates active transactions, rolls back any uncommitted changes, and shuts down the database cleanly. Recommended for most shutdowns. |
+| **TRANSACTIONAL** | Waits for active transactions to complete before disconnecting users and shutting down. Useful when you want to preserve user work in progress. |
+| **ABORT**        | Forces an immediate shutdown without rolling back transactions or performing cleanup. Should only be used when other shutdown methods fail. |
+
+## 📝 Usage in SQL*Plus
+
+Connect as SYSDBA and run one of the following:
+
+```sql
+SHUTDOWN NORMAL;
+SHUTDOWN IMMEDIATE;
+SHUTDOWN TRANSACTIONAL;
+SHUTDOWN ABORT;
+```
+
+
+
+# Oracle 12c Upgrade Overview
+----- notes ---
+
+
+
+# Oracle DBA - Topic 5: Tablespace Management
+
+Tablespaces are logical storage containers in Oracle that allow efficient data organization and management. This module explains how Oracle stores data, how to manage tablespaces, types of tablespaces, and various advanced features like temporary tablespace groups and extent management.
+
+---
+
+## Table of Contents
+
+1. [How Data is Stored in a Database](#how-data-is-stored-in-a-database)
+2. [Tablespace Concepts](#tablespace-concepts)
+3. [Types of Tablespaces](#types-of-tablespaces)
+   - [Permanent Tablespaces](#permanent-tablespaces)
+   - [Temporary Tablespaces](#temporary-tablespaces)
+   - [Undo Tablespaces](#undo-tablespaces)
+   - [Bigfile vs Smallfile Tablespaces](#bigfile-vs-smallfile-tablespaces)
+4. [Online vs Offline Tablespaces](#online-vs-offline-tablespaces)
+5. [Creating a Tablespace](#creating-a-tablespace)
+6. [Tablespace with Different Block Sizes](#tablespace-with-different-block-sizes)
+7. [Temporary Tablespace Management](#temporary-tablespace-management)
+8. [Temporary Tablespace Groups](#temporary-tablespace-groups)
+9. [Extent Management](#extent-management)
+10. [Other Important Concepts](#other-important-concepts)
+11. [Conclusion](#conclusion)
+
+---
+
+## How Data is Stored in a Database
+
+- Data in Oracle is stored **physically in datafiles** and **logically in tablespaces**.
+- Tablespaces contain **segments**, which are made of **extents**, and extents are made of **blocks**.
+- This hierarchy allows Oracle to manage data efficiently at different levels.
+
+---
+
+## Tablespace Concepts
+
+- **Tablespace**: A logical container that holds schema objects like tables and indexes.
+- Each tablespace is associated with one or more **datafiles**.
+- A single datafile belongs to one and only one tablespace.
+
+---
+
+## Types of Tablespaces
+
+### Permanent Tablespaces
+- Store permanent user and system data.
+- Example: `USERS`, `SYSTEM`, `SYSAUX`
+
+### Temporary Tablespaces
+- Store intermediate results of operations like sorts, joins, and groupings.
+- Data is not persistent and is cleared after the session ends.
+
+### Undo Tablespaces
+- Store undo data used to roll back transactions and recover the database.
+
+### Bigfile vs Smallfile Tablespaces
+
+| Type       | Description                            |
+|------------|----------------------------------------|
+| Smallfile  | Default. Allows multiple datafiles.     |
+| Bigfile    | Contains one very large datafile. Useful in large databases, easier management via ASM or OMF.|
+
+---
+
+## Online vs Offline Tablespaces
+
+| State      | Description |
+|------------|-------------|
+| **Online** | Available for read/write operations. |
+| **Offline**| Unavailable to users; useful for maintenance or data recovery. |
+
+```sql
+-- Make offline
+ALTER TABLESPACE users OFFLINE;
+
+-- Bring back online
+ALTER TABLESPACE users ONLINE;
+```
+
+## Creating a Tablespace
+```sql
+CREATE TABLESPACE mydata
+DATAFILE '/u01/oradata/mydata01.dbf' SIZE 100M
+AUTOEXTEND ON NEXT 10M MAXSIZE 1G
+EXTENT MANAGEMENT LOCAL
+SEGMENT SPACE MANAGEMENT AUTO;
+```
+EXTENT MANAGEMENT LOCAL is preferred over dictionary-managed (obsolete from 10g onward).
+
+### Tablespace with Different Block Sizes
+- Useful when certain workloads perform better with non-default block sizes.
+- Default block size is set at DB creation.
+- Other block sizes: 2K, 4K, 8K, 16K, 32K.
+
+### Example (8K DB default, create 16K tablespace):
+```sql
+CREATE TABLESPACE data_16k
+DATAFILE '/u01/oradata/data_16k.dbf' SIZE 100M
+BLOCKSIZE 16K
+EXTENT MANAGEMENT LOCAL;
+```
+
+Requires a matching DB_nK_CACHE_SIZE initialization parameter.
+
+### Temporary Tablespace Management
+```sql
+CREATE TEMPORARY TABLESPACE temp_data
+TEMPFILE '/u01/oradata/temp_data01.dbf' SIZE 100M
+EXTENT MANAGEMENT LOCAL UNIFORM SIZE 1M;
+```
+- Temporary tablespaces use tempfiles, not datafiles.
+- Can’t contain permanent segments.
+
+### Temporary Tablespace Groups
+- Combine multiple temporary tablespaces into one logical unit.
+- Improves scalability for sorting operations across multiple tempfiles.
+
+### Create and Add:
+```sql
+CREATE TEMPORARY TABLESPACE temp1 TEMPFILE '/u01/temp1.dbf' SIZE 50M;
+CREATE TEMPORARY TABLESPACE temp2 TEMPFILE '/u01/temp2.dbf' SIZE 50M;
+
+ALTER DATABASE DEFAULT TEMPORARY TABLESPACE temp1;
+
+ALTER TABLESPACE temp2 TABLESPACE GROUP temp_group1;
+ALTER TABLESPACE temp1 TABLESPACE GROUP temp_group1;
+```
+
+### Assign to User:
+```sql
+ALTER USER scott TEMPORARY TABLESPACE temp_group1;
+```
+## Extent Management
+  - Local Extent Management:
+
+    - Tracks extents using bitmaps.
+    - More efficient than old dictionary-based tracking.
+    - Automatically manages extent allocation.
+  - Extent Allocation Types:
+    - Uniform: All extents are same size.
+    - Autoallocate: Oracle decides extent sizes.
+
+Example:
+```sql
+-- Uniform extent size
+CREATE TABLESPACE uniform_ts
+DATAFILE '/u01/uniform01.dbf' SIZE 100M
+EXTENT MANAGEMENT LOCAL UNIFORM SIZE 1M;
+
+-- Autoallocate
+CREATE TABLESPACE auto_ts
+DATAFILE '/u01/auto01.dbf' SIZE 100M
+EXTENT MANAGEMENT LOCAL AUTOALLOCATE;
+```
+
+# Oracle Key File Locations and Retrieval Queries
+
+During Oracle database backups, it is essential to know where critical files are located on disk. This README provides SQL queries to retrieve the paths of these key components directly from the database.
+
+---
+
+## 📦 Key Oracle File Types and Their Queries
+
+| Component           | Description                                                  | Query |
+|---------------------|--------------------------------------------------------------|-------|
+| **Datafiles**        | Store user and system data (tables, indexes, etc.)           | `SELECT file_name FROM dba_data_files;` |
+| **Tempfiles**        | Used for sorting and temporary operations                    | `SELECT file_name FROM dba_temp_files;` |
+| **Redo Log Files**   | Track all database changes for recovery                      | `SELECT member FROM v$logfile;` |
+| **Control Files**    | Store database metadata and structure                        | `SELECT name FROM v$controlfile;` |
+| **SPFILE / PFILE**   | Initialization parameter files used to start the database    | `SHOW PARAMETER spfile;`<br>`SHOW PARAMETER pfile;` |
+| **Archive Log Files**| Store redo logs when the DB is in ARCHIVELOG mode            | `SHOW PARAMETER log_archive_dest;` |
+| **Flash Recovery Area (FRA)** | Optional location for backups and archived logs     | `SHOW PARAMETER db_recovery_file_dest;` |
+
+---
+
+## 🧪 Sample Usage in SQL\*Plus
+
+```sql
+-- Connect as SYSDBA
+sqlplus / as sysdba
+
+-- Query datafile locations
+SELECT file_name FROM dba_data_files;
+
+-- Query control file locations
+SELECT name FROM v$controlfile;
+
+-- Query redo log file locations
+SELECT member FROM v$logfile;
+
+-- Show archive log destination
+SHOW PARAMETER log_archive_dest;
+
+-- Show parameter file (spfile or pfile)
+SHOW PARAMETER spfile;
+```
+
+
+# Oracle DBA - Topic 6: Undo Management
+
+Undo is a critical part of Oracle’s transaction processing. It stores information required to rollback transactions, recover the database, and provide read consistency.
+
+---
+## What is Undo?
+
+Undo is the data Oracle stores to:
+- Roll back uncommitted changes when a transaction is aborted.
+- Provide **read consistency** by supplying previous versions of data.
+- Recover the database to a consistent state after a failure.
+
+---
+
+## Purpose of Undo Data
+
+- **Transaction Rollback** – Undo allows partial or full rollback of a transaction.
+- **Read Consistency** – Ensures users don’t see intermediate or uncommitted changes.
+- **Database Recovery** – During recovery, undo helps Oracle roll back uncommitted changes.
+- **Flashback Features** – Flashback queries and flashback table operations use undo data.
+
+---
+
+## Undo Segments and Tablespaces
+
+- **Undo Segments**: Special segments that store undo records for transactions.
+- **Undo Tablespace**: Dedicated tablespace where undo segments reside (from Oracle 9i onwards).
+
+---
+
+## Undo Management Types
+
+### Automatic Undo Management (AUM)
+- Oracle automatically creates and manages undo segments.
+- Recommended and default mode since Oracle 9i.
+- Controlled by `UNDO_MANAGEMENT=AUTO`.
+
+### Manual Undo Management
+- DBA manually creates and manages rollback segments.
+- Deprecated in newer Oracle versions.
+- Controlled by `UNDO_MANAGEMENT=MANUAL`.
+
+---
+
+## Undo Retention
+
+- **UNDO_RETENTION** parameter defines how long (in seconds) undo data should be retained.
+- Helps with long-running queries and flashback operations.
+
+```sql
+ALTER SYSTEM SET UNDO_RETENTION = 1800; -- 30 minutes
+```
+
+To see current retention period
+```sql
+SHOW PARAMETER undo_retention;
+
+
+OR
+SELECT name, value
+FROM v$parameter
+WHERE name = 'undo_retention';
+```
+
+## Guaranteed Undo Retention
+- Ensures undo data is retained for the specified retention period, even if space is needed.
+```sql
+ALTER TABLESPACE undotbs1 RETENTION GUARANTEE;
+```
+
+- Default behavior is NOGUARANTEE, where undo may be overwritten if needed.
+
+
+## Managing Undo Tablespace
+Creating a New Undo Tablespace:
+```sql
+CREATE UNDO TABLESPACE undotbs2
+DATAFILE '/u01/oradata/undotbs2.dbf' SIZE 500M
+AUTOEXTEND ON;
+```
+### Setting Undo Tablespace for Use:
+```sql
+ALTER SYSTEM SET UNDO_TABLESPACE = undotbs2;
+```
+### Dropping an Undo Tablespace:
+- Only possible when not in use:
+```sql
+DROP TABLESPACE undotbs1 INCLUDING CONTENTS AND DATAFILES;
+```
+### Switching Undo Tablespace
+1. Create new undo tablespace (if not exists).
+2. Set the new tablespace as active:
+```sql
+ALTER SYSTEM SET UNDO_TABLESPACE = undotbs2;
+```
+3. Optional: Drop the old undo tablespace.
+
+### Monitoring Undo Usage
+#### Check Active Undo Tablespace:
+```sql
+SHOW PARAMETER undo_tablespace;
+```
+
+### View Undo Statistics:
+```sql
+SELECT a.tablespace_name, b.undo_size, a.status
+FROM dba_tablespaces a, v$undostat b
+WHERE a.contents = 'UNDO';
+```
+
+### Check Undo Usage Per Transaction:
+```sql
+SELECT s.sid, s.serial#, t.used_urec, t.used_ublk
+FROM v$transaction t, v$session s
+WHERE t.ses_addr = s.saddr;
+```
+
+### Best Practices
+- Use Automatic Undo Management.
+- Set a reasonable UNDO_RETENTION based on workload.
+- Enable RETENTION GUARANTEE if using flashback features.
+- Monitor v$undostat to tune undo size and retention.
+- Avoid using manual undo management unless absolutely required.
+
+
+# Oracle DBA - Redo Management
+
+Redo management is a core component of Oracle's architecture that ensures transactional durability, recovery capability, and data consistency. Every change to the database is first written to **redo logs**, making redo crucial for crash recovery and replication.
+
+---
+
+## 📘 What is Redo?
+
+- Redo records all changes made to database objects, including data and metadata.
+- It includes INSERTs, UPDATEs, DELETEs, and structural changes like table creation.
+- Redo logs help Oracle recover from:
+  - Instance failure
+  - Media failure
+  - System crash
+
+---
+
+## 🧱 Core Components of Redo
+
+| Component       | Description |
+|----------------|-------------|
+| **Redo Log Buffer** | Memory area in SGA storing redo entries before writing to disk. |
+| **Online Redo Log Files** | Disk files where redo data is persistently stored. |
+| **Log Writer (LGWR)** | Background process that writes from redo buffer to redo files. |
+| **Redo Log Groups** | Logical collections of redo log members. |
+| **Redo Log Members** | Physical redo files in a group (multiplexed for safety). |
+
+---
+
+## 🔁 How Redo Works (Flow)
+
+1. A user changes data (e.g., `UPDATE` statement).
+2. Redo record generated and placed into the **redo buffer**.
+3. **LGWR** writes redo entries from buffer to online redo logs:
+   - On COMMIT
+   - Every 3 seconds
+   - When redo buffer is one-third full
+   - Before **DBWR** flushes dirty blocks
+4. Changes are now durable and recoverable.
+
+---
+
+## 🧠 Redo Log Buffer
+
+- Part of the **System Global Area (SGA)**.
+- Size controlled by `LOG_BUFFER` parameter.
+- Holds redo records until flushed by LGWR.
+
+```sql
+SHOW PARAMETER log_buffer;
+```
+
+### Redo Log Groups & Members
+- Oracle requires at least 2 log groups for circular writing.
+- Each group can have one or more members (physical files).
+- Multiple members = multiplexing, improves fault tolerance.
+
+### Creating Redo Log Groups
+```sql
+ALTER DATABASE ADD LOGFILE GROUP 3 (
+  '/u01/app/oracle/oradata/ORCL/redo03a.log',
+  '/u02/app/oracle/oradata/ORCL/redo03b.log'
+) SIZE 100M;
+```
+
+### Adding Redo Log Member
+```sql
+ALTER DATABASE ADD LOGFILE MEMBER '/u03/oradata/redo01c.log' TO GROUP 1;
+```
+
+### Log Switches
+- A log switch occurs when Oracle finishes writing to one redo group and moves to the next.
+- It happens automatically or can be forced manually.
+
+### Manual Switch
+```sql
+ALTER SYSTEM SWITCH LOGFILE;
+```
+### Monitoring Redo Logs
+#### View Redo Log Groups
+```sql
+SELECT GROUP#, STATUS, BYTES/1024/1024 AS SIZE_MB FROM V$LOG;
+```
+#### View Redo Log Members
+```sql
+SELECT GROUP#, MEMBER, TYPE FROM V$LOGFILE;
+```
+
+# Oracle DBA - User Management
+
+User management in Oracle involves creating, modifying, and controlling access for database users. DBAs are responsible for user creation, granting roles and privileges, controlling resource usage, and ensuring database security.
+
+---
+
+## 👤 What is a User in Oracle?
+
+- A **user** is a database account that can own schema objects and connect to the database.
+- Each user has a **default tablespace**, **temporary tablespace**, **profile**, and **authentication mechanism**.
+
+---
+
+## 🏗️ Creating a User
+
+### Syntax:
+
+```sql
+CREATE USER username IDENTIFIED BY user_password
+DEFAULT TABLESPACE users
+TEMPORARY TABLESPACE temp
+QUOTA 100M ON users;
+```
+
+```sql
+CREATE USER username IDENTIFIED BY user_password
+password expire;
+```
+OR simply
+```sql
+CREATE USER username IDENTIFIED BY user_password
+```
+- IDENTIFIED BY: Sets the password.
+
+- DEFAUL9T TABLESPACE: Location where user’s objects are stored.
+
+- TEMPORARY TABLESPACE: Used for sort operations.
+
+- QUOTA: Limits how much space a user can use in a tablespace.
+
+
+### Granting Privileges
+Oracle has two types of privileges:
+
+1. System Privileges – e.g., CREATE TABLE, CREATE USER, ALTER SESSION
+2. Object Privileges – e.g., SELECT, INSERT, UPDATE on specific objects
+
+### Granting System Privileges:
+```sql
+GRANT CREATE SESSION, CREATE TABLE TO john;
+```
+
+### Granting Object Privileges:
+```sql
+GRANT SELECT, INSERT ON employees TO john;
+```
+
+## Roles
+- A role is a collection of privileges.
+- Makes privilege management easier.
+
+### Creating and Granting Roles
+```sql
+CREATE ROLE hr_role;
+GRANT SELECT, INSERT ON employees TO hr_role;  #employees table
+GRANT hr_role TO john;
+```
+
+### Default and Admin Options:
+```sql
+GRANT hr_role TO john WITH ADMIN OPTION;
+```
+
+## Viewing Users and Privileges
+
+### List All Users
+```sql
+SELECT username, account_status FROM dba_users;
+```
+
+### Show System Privileges
+```sql
+SELECT * FROM dba_sys_privs WHERE grantee = 'JOHN';
+```
+
+### Show Object Privileges
+```sql
+SELECT * FROM dba_tab_privs WHERE grantee = 'JOHN';
+```
+
+## User Authentication and Locking
+### Authentication types:
+- Password
+- External (OS)
+- Global (LDAP)
+
+### Locking and Unlocking Users
+```sql
+ALTER USER john ACCOUNT LOCK;
+ALTER USER john ACCOUNT UNLOCK;
+```
+
+
+## Password Expiry and Profiles
+- Use profiles to enforce password policies and resource limits.
+
+### Creating a Profile
+```sql
+CREATE PROFILE limited_user LIMIT
+  FAILED_LOGIN_ATTEMPTS 5
+  PASSWORD_LIFE_TIME 30;
+```
+### Assign Profile to User
+```sql
+ALTER USER john PROFILE limited_user;
+```
+
+## Altering and Dropping Users
+### Change User Password
+```sql
+ALTER USER john IDENTIFIED BY new_password;
+```
+### Change Default Tablespace
+```sql
+ALTER USER john DEFAULT TABLESPACE example;
+```
+
+### Drop a User
+```sql
+DROP USER john;
+OR
+DROP USER john CASCADE;
+```
+- CASCADE is required to drop user-owned schema objects.
+
+### Common User vs Local User (Multitenant - CDB/PDB)
+- Common User: Exists in all containers (prefixed with C##)
+- Local User: Exists only in one pluggable database (PDB)
+
+### Create Common User
+```sql
+CREATE USER C##admin IDENTIFIED BY password CONTAINER=ALL;
+```
+### Create Local User
+```sql
+CREATE USER app_user IDENTIFIED BY secret CONTAINER=CURRENT;
+```

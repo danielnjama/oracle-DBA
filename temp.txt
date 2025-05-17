@@ -1,0 +1,16 @@
+CREATE DATABASE ORCL
+   USER SYS IDENTIFIED BY oracle
+   USER SYSTEM IDENTIFIED BY oracle
+   LOGFILE GROUP 1 ('/opt/oracle/oradata/XE/redo04.log') SIZE 50M,
+           GROUP 2 ('/opt/oracle/oradata/XE/redo05.log') SIZE 50M
+   MAXLOGFILES 5
+   MAXDATAFILES 100
+   CHARACTER SET AL32UTF8
+   DATAFILE '/opt/oracle/oradata/XE/system01.dbf' SIZE 700M REUSE
+   SYSAUX DATAFILE '/opt/oracle/oradata/XE/sysaux01.dbf' SIZE 550M
+   DEFAULT TEMPORARY TABLESPACE temp
+      TEMPFILE '/opt/oracle/oradata/XE/temp01.dbf' SIZE 20M
+   UNDO TABLESPACE undotbs1
+      DATAFILE '/opt/oracle/oradata/XE/undotbs01.dbf' SIZE 200M;
+
+      
