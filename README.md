@@ -1189,3 +1189,216 @@ ALTER PLUGGABLE DATABASE your_pdb_name CLOSE IMMEDIATE;
 - Avoid creating application tables or users directly in the CDB$ROOT.
 - Name common users/roles with C## prefix only when needed.
 - Regularly check which container you're in before executing critical commands.
+
+
+# Oracle DBA - Backup and Recovery
+
+Backup and recovery are core responsibilities of a DBA. They ensure data availability, integrity, and durability in case of hardware failure, user error, or data corruption.
+
+---
+
+##  What is Backup?
+
+A **backup** is a copy of data from the database stored separately to allow recovery in case of data loss.
+
+### Types of Backups:
+
+| Type        | Description |
+|-------------|-------------|
+| **Cold Backup** (Offline) | Taken when DB is shut down. Files are copied at OS level. |
+| **Hot Backup** (Online)  | Taken while DB is open. Requires ARCHIVELOG mode. |
+| **RMAN Backup**          | Oracle’s recommended method using Recovery Manager. |
+
+---
+
+##  What is Recovery?
+
+**Recovery** is the process of restoring lost or damaged data using backup files and applying redo data to bring the DB to a consistent state.
+
+### Recovery Types:
+
+| Type                  | Description |
+|-----------------------|-------------|
+| **Instance Recovery** | Handled automatically by SMON after a crash. |
+| **Media Recovery**    | Required when physical files are lost/corrupted. |
+| **Incomplete Recovery** | Recovers up to a point in time (PITR), SCN, or log sequence. |
+
+---
+
+##  Physical vs Logical Backup
+
+| Physical Backup        | Logical Backup          |
+|------------------------|-------------------------|
+| Uses datafiles, control files, redo logs | Uses `exp` / `expdp` for schema/rows |
+| RMAN or OS copy        | Data Pump utilities     |
+| Faster recovery        | Good for migrations     |
+
+---
+
+##  Backup Components
+
+- **Datafiles**: Store actual data
+- **Control File**: Tracks structure of DB
+- **Redo Logs**: Track changes (for recovery)
+- **Archived Redo Logs**: Needed for media recovery
+- **Parameter Files**: SPFILE or PFILE
+
+---
+
+##  Cold Backup Steps
+
+1. Shutdown database:
+
+```sql
+SHUTDOWN IMMEDIATE;
+```
+2. Copy datafiles, control files, and redo logs at OS level.
+3. Startup database:
+```sql
+STARTUP;
+```
+- Cold backup is consistent but requires downtime.
+
+
+## Hot Backup (User-managed)
+1. Enable ARCHIVELOG mode:
+```sql
+SHUTDOWN IMMEDIATE;
+STARTUP MOUNT;
+ALTER DATABASE ARCHIVELOG;
+ALTER DATABASE OPEN;
+```
+2. Begin tablespace backup:
+```sql
+ALTER TABLESPACE users BEGIN BACKUP;
+-- Copy datafile
+ALTER TABLESPACE users END BACKUP;
+```
+3. Backup control and redo logs:
+```sql
+ALTER DATABASE BACKUP CONTROLFILE TO '/backup/control01.ctl';
+```
+
+## RMAN (Recovery Manager)
+RMAN automates and manages backup/recovery operations.
+
+## Configure RMAN:
+```sql
+CONFIGURE RETENTION POLICY TO REDUNDANCY 2;
+CONFIGURE CONTROLFILE AUTOBACKUP ON;
+```
+
+## Full DB Backup:
+```sql
+RMAN> BACKUP DATABASE;
+```
+
+## Backup with Archive Logs:
+```sql
+RMAN> BACKUP DATABASE PLUS ARCHIVELOG;
+```
+
+### Backup Report Queries
+check backup info:
+```sql
+SELECT * FROM V$BACKUP;
+SELECT * FROM V$DATAFILE;
+SELECT * FROM V$ARCHIVED_LOG;
+```
+
+
+##  Restore and Recovery Using RMAN
+
+### Restore from RMAN Backup
+
+```bash
+RMAN> SHUTDOWN IMMEDIATE;
+RMAN> STARTUP MOUNT;
+RMAN> RESTORE DATABASE;
+RMAN> RECOVER DATABASE;
+RMAN> ALTER DATABASE OPEN;
+```
+If a control file is lost, restore it first using RESTORE CONTROLFILE.
+
+## Control File and SPFILE Backup
+### Backup Control File
+```bash
+RMAN> BACKUP CURRENT CONTROLFILE;
+```
+
+### Backup SPFILE
+```sql
+RMAN> BACKUP SPFILE;
+```
+Control file backups are important for restoring DB structure and log history.
+
+
+## Incomplete Recovery (Point-in-Time Recovery - PITR)
+Used when recovery is needed up to a specific point in time, SCN, or log sequence.
+
+### Example: Recover until time
+```bash
+RMAN> SHUTDOWN IMMEDIATE;
+RMAN> STARTUP MOUNT;
+RMAN> RUN {
+  SET UNTIL TIME '2025-05-16 12:00:00';
+  RESTORE DATABASE;
+  RECOVER DATABASE;
+}
+RMAN> ALTER DATABASE OPEN RESETLOGS;
+```
+Use RESETLOGS after PITR to reset redo log sequence.
+
+## Flashback Technology
+Flashback provides a fast alternative to PITR:
+
+### Flashback Database
+```sql
+FLASHBACK DATABASE TO TIMESTAMP TO_TIMESTAMP('2025-05-16 10:00:00', 'YYYY-MM-DD HH24:MI:SS');
+```
+Requires Flashback to be enabled and flashback logs configured.
+
+### Common Backup and Recovery Errors
+| Error             | Cause                   | Solution                      |
+| ----------------- | ----------------------- | ----------------------------- |
+| `ORA-01578`       | Block corruption        | Restore & recover datafile    |
+| `ORA-03113`       | Connection lost         | Check instance status         |
+| `RMAN-06054`      | No backup found         | Check backup catalog          |
+| `ORA-01113/01110` | Datafile needs recovery | Use RMAN to recover           |
+| `ORA-19809`       | No space for archivelog | Backup or delete archive logs |
+
+
+### Best Practices
+- Use RMAN regularly.
+- Keep multiple backup copies (onsite/offsite).
+- Enable ARCHIVELOG and Flashback.
+- Schedule daily full and incremental backups.
+- Test restore procedures periodically.
+- Backup control file and SPFILE.
+- Monitor archive log space (V$ARCHIVED_LOG, V$RECOVERY_FILE_DEST).
+
+### Useful RMAN Commands Summary
+```sql
+# Backup full DB
+BACKUP DATABASE;
+
+# Backup database + archived logs
+BACKUP DATABASE PLUS ARCHIVELOG;
+
+# Restore and recover DB
+RESTORE DATABASE;
+RECOVER DATABASE;
+
+# Backup control file
+BACKUP CURRENT CONTROLFILE;
+
+# Check backup info
+LIST BACKUP;
+REPORT OBSOLETE;
+
+# Validate backups
+VALIDATE BACKUPSET;
+
+# Configure retention
+CONFIGURE RETENTION POLICY TO REDUNDANCY 2;
+```
