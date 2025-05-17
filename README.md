@@ -535,7 +535,7 @@ Oracle Database supports multiple shutdown methods, each suited to different sce
 | **TRANSACTIONAL** | Waits for active transactions to complete before disconnecting users and shutting down. Useful when you want to preserve user work in progress. |
 | **ABORT**        | Forces an immediate shutdown without rolling back transactions or performing cleanup. Should only be used when other shutdown methods fail. |
 
-## 📝 Usage in SQL*Plus
+## Usage in SQL*Plus
 
 Connect as SYSDBA and run one of the following:
 
@@ -695,7 +695,7 @@ During Oracle database backups, it is essential to know where critical files are
 
 ---
 
-## 📦 Key Oracle File Types and Their Queries
+##  Key Oracle File Types and Their Queries
 
 | Component           | Description                                                  | Query |
 |---------------------|--------------------------------------------------------------|-------|
@@ -709,7 +709,7 @@ During Oracle database backups, it is essential to know where critical files are
 
 ---
 
-## 🧪 Sample Usage in SQL\*Plus
+##  Sample Usage in SQL\*Plus
 
 ```sql
 -- Connect as SYSDBA
@@ -863,7 +863,7 @@ Redo management is a core component of Oracle's architecture that ensures transa
 
 ---
 
-## 📘 What is Redo?
+## What is Redo?
 
 - Redo records all changes made to database objects, including data and metadata.
 - It includes INSERTs, UPDATEs, DELETEs, and structural changes like table creation.
